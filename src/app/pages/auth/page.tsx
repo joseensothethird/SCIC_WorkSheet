@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { loginUser, registerUser } from "../../lib/auth";
-import { supabase } from "../../lib/SupabaseClient";
 import styles from "./../../CSS/auth.module.css";
 
 export default function AuthForms() {
@@ -14,63 +13,39 @@ export default function AuthForms() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [supabaseInfo, setSupabaseInfo] = useState<string>("");
-
-  // Optional: check if Supabase client is connected
-  useEffect(() => {
-    async function checkSupabase() {
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (data?.session) {
-          setSupabaseInfo("Connected to Supabase. Session active.");
-        } else {
-          setSupabaseInfo(
-            "Connected to Supabase. No active session. Email confirmation may be required."
-          );
-        }
-      } catch (err) {
-        setSupabaseInfo("Unable to connect to Supabase.");
-        console.error(err);
-      }
-    }
-    checkSupabase();
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setIsLoading(true);
-  setError("");
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
 
-  try {
-    if (isLogin) {
-      const res = await loginUser(email, password);
-      if (res.ok) {
-        // Redirect to main page after login
-        router.replace("/");
+    try {
+      if (isLogin) {
+        const res = await loginUser(email, password);
+        if (res.ok) {
+          router.replace("/");
+        } else {
+          setError(res.error?.message || "Invalid email or password.");
+        }
       } else {
-        setError(res.error?.message || "Invalid email or password.");
+        if (password !== confirmPassword) {
+          setError("Passwords do not match");
+          setIsLoading(false);
+          return;
+        }
+        const res = await registerUser(email, password);
+        if (res.ok) {
+          router.replace("/");
+        } else {
+          setError(res.error?.message || "Registration failed.");
+        }
       }
-    } else {
-      if (password !== confirmPassword) {
-        setError("Passwords do not match");
-        setIsLoading(false);
-        return;
-      }
-      const res = await registerUser(email, password);
-      if (res.ok) {
-        // Redirect to main page after registration
-        router.replace("/");
-      } else {
-        setError(res.error?.message || "Registration failed.");
-      }
+    } catch {
+      setError("An unexpected error occurred. Try again.");
+    } finally {
+      setIsLoading(false);
     }
-  } catch {
-    setError("An unexpected error occurred. Try again.");
-  } finally {
-    setIsLoading(false);
-  }
-};
-
+  };
 
   return (
     <div className={styles.authContainer}>
@@ -147,9 +122,6 @@ export default function AuthForms() {
             {isLoading ? "Processing..." : isLogin ? "Sign In" : "Register"}
           </button>
         </form>
-
-        {/* Supabase Info / Warning */}
-        {supabaseInfo && <p className={styles.supabaseInfo}>{supabaseInfo}</p>}
 
         {/* Toggle Form */}
         <div className={styles.divider}>

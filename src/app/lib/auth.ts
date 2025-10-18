@@ -1,9 +1,8 @@
 // src/lib/auth.ts
 import { supabase } from "./../lib/SupabaseClient";
-import { User as SupabaseUser, Session as SupabaseSession } from "@supabase/supabase-js";
+import type { User as SupabaseUser, Session as SupabaseSession } from "@supabase/supabase-js";
 
 export type User = SupabaseUser;
-
 export type Session = SupabaseSession | null;
 
 /** Register user with email & password */
@@ -31,13 +30,6 @@ export async function logoutUser() {
   const { error } = await supabase.auth.signOut();
   if (error) console.error("logoutUser:", error);
   return { ok: !error, error };
-}
-
-/** Get current session (client-side, sync) */
-export function getSession(): Session {
-  // @ts-expect-error Supabase types may not expose getSession synchronously
-  const session = supabase.auth.getSession?.() ?? null;
-  return session as Session;
 }
 
 /** Get current session (async) */
