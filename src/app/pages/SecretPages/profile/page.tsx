@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getSessionAsync, logoutUser, deleteUserAccount, User } from "./../../../lib/auth";
+import { getSession, logoutUser, deleteUserAccount, User } from "./../../../lib/auth";
 import { supabase } from "./../../../lib/SupabaseClient";
 import styles from "../../../CSS/SecretPage.module.css";
 
@@ -14,7 +14,7 @@ export default function SecretPageProfile() {
 
   useEffect(() => {
     async function init() {
-      const s = await getSessionAsync();
+      const s = await getSession(); // Use the correct async getSession
       if (!s) {
         router.push("/");
         return;

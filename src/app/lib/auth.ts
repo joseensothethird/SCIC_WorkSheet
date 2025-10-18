@@ -1,4 +1,3 @@
-// src/lib/auth.ts
 import { supabase } from "./../lib/SupabaseClient";
 import type { User as SupabaseUser, Session as SupabaseSession } from "@supabase/supabase-js";
 
@@ -32,11 +31,11 @@ export async function logoutUser() {
   return { ok: !error, error };
 }
 
-/** Get current session (async) */
-export async function getSessionAsync(): Promise<Session> {
+/** Get current session (async only) */
+export async function getSession(): Promise<Session> {
   const { data, error } = await supabase.auth.getSession();
   if (error) {
-    console.error("getSessionAsync:", error);
+    console.error("getSession:", error);
     return null;
   }
   return data.session;

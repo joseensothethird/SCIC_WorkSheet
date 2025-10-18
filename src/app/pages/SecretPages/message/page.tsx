@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getSessionAsync, logoutUser, deleteUserAccount } from "./../../../lib/auth";
+import { getSession, logoutUser, deleteUserAccount } from "./../../../lib/auth";
 import { supabase } from "./../../../lib/SupabaseClient";
 import styles from "../../../CSS/SecretPage.module.css";
 
@@ -22,7 +22,7 @@ export default function SecretPageMessage() {
 
   useEffect(() => {
     async function init() {
-      const s = await getSessionAsync();
+      const s = await getSession(); // ✅ Use the correct async getSession
       if (!s) {
         router.push("/");
         return;
@@ -30,7 +30,7 @@ export default function SecretPageMessage() {
 
       const user: User = {
         id: s.user.id,
-        email: s.user.email || ""
+        email: s.user.email || "",
       };
 
       setSession(user);
@@ -69,11 +69,9 @@ export default function SecretPageMessage() {
       setStatusMessage("⚠️ Secret message cannot be empty.");
       return;
     }
-
     if (!session) return;
 
     setSaving(true);
-
     try {
       const { error } = await supabase
         .from("secrets")
@@ -85,9 +83,7 @@ export default function SecretPageMessage() {
               updated_at: new Date().toISOString(),
             },
           ],
-          {
-            onConflict: "user_id",
-          }
+          { onConflict: "user_id" }
         );
 
       if (error) {
@@ -105,39 +101,19 @@ export default function SecretPageMessage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className={styles.container}>
-        <div className={styles.loading}>
-          <div className={styles.icon}>
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-          </div>
-          <h2 style={{ color: '#000000' }}>Loading Your Secret</h2>
-          <p style={{ color: '#000000' }}>Retrieving your encrypted message...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!session) return null;
-
   const handleDeleteAccount = async () => {
+    if (!session) return;
+
     const confirmDelete = confirm(
       "⚠️ Are you sure you want to delete your account?\n\nThis will permanently delete:\n• Your account\n• Your secret message\n• All your friend connections\n\nThis action CANNOT be undone!"
     );
 
     if (!confirmDelete) return;
 
-    const doubleConfirm = prompt(
-      "Type YES to delete your account permanently."
-    );
-
+    const doubleConfirm = prompt("Type YES to delete your account permanently.");
     if (doubleConfirm !== "YES") return;
 
     try {
-      // Pass the user ID to deleteUserAccount
       await deleteUserAccount(session.id);
       router.push("/");
     } catch (err) {
@@ -146,6 +122,29 @@ export default function SecretPageMessage() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.loading}>
+          <div className={styles.icon}>
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+              />
+            </svg>
+          </div>
+          <h2 style={{ color: "#000" }}>Loading Your Secret</h2>
+          <p style={{ color: "#000" }}>Retrieving your encrypted message...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) return null;
+
   return (
     <div className={styles.container}>
       <div className={styles.content}>
@@ -153,11 +152,20 @@ export default function SecretPageMessage() {
         <div className={styles.welcomeSection}>
           <div className={styles.icon}>
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+              />
             </svg>
           </div>
-          <h1 className={styles.title} style={{ color: '#000000' }}>Secret Message</h1>
-          <p className={styles.welcomeText} style={{ color: '#000000' }}>Welcome back, {session.email} 👋</p>
+          <h1 className={styles.title} style={{ color: "#000" }}>
+            Secret Message
+          </h1>
+          <p className={styles.welcomeText} style={{ color: "#000" }}>
+            Welcome back, {session.email} 👋
+          </p>
         </div>
 
         {/* Message Editor */}
@@ -172,12 +180,21 @@ export default function SecretPageMessage() {
               onChange={handleMessageChange}
               maxLength={1000}
             />
-            <div style={{ marginTop: "0.75rem", fontSize: "0.875rem", color: charCount > 900 ? "#ef4444" : "#6b7280" }}>
+            <div
+              style={{
+                marginTop: "0.75rem",
+                fontSize: "0.875rem",
+                color: charCount > 900 ? "#ef4444" : "#6b7280",
+              }}
+            >
               {charCount} / 1000 characters
             </div>
             {statusMessage && <div className={styles.statusMessage}>{statusMessage}</div>}
-
-            <button onClick={saveMessage} disabled={saving || !message.trim()} className={styles.saveButton}>
+            <button
+              onClick={saveMessage}
+              disabled={saving || !message.trim()}
+              className={styles.saveButton}
+            >
               {saving ? "Saving..." : "Save Secret"}
             </button>
           </div>
@@ -185,7 +202,9 @@ export default function SecretPageMessage() {
 
         {/* Actions */}
         <div className={styles.actionButtons}>
-          <button onClick={() => router.push("/")} className={styles.backButton}>Back to Dashboard</button>
+          <button onClick={() => router.push("/")} className={styles.backButton}>
+            Back to Dashboard
+          </button>
           <button
             onClick={async () => {
               await logoutUser();
@@ -195,10 +214,7 @@ export default function SecretPageMessage() {
           >
             Sign Out
           </button>
-          <button
-            onClick={handleDeleteAccount}
-            className={styles.deleteButton}
-          >
+          <button onClick={handleDeleteAccount} className={styles.deleteButton}>
             Delete Account
           </button>
         </div>

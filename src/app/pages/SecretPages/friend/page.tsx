@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getSessionAsync, logoutUser } from "../../../lib/auth";
-import { supabase } from "./../../../lib/SupabaseClient";
+import { getSession, logoutUser } from "../../../lib/auth";
+import { supabase } from "../../../lib/SupabaseClient";
 import styles from "../../../CSS/SecretPage.module.css";
 
 interface User {
@@ -50,14 +50,14 @@ export default function SecretPage3() {
 
   useEffect(() => {
     async function init() {
-      const s = await getSessionAsync();
+      const s = await getSession();
       if (!s) return router.push("/");
-      
+
       const user: User = {
         id: s.user.id,
-        email: s.user.email || ""
+        email: s.user.email || "",
       };
-      
+
       setSession(user);
       await fetchFriends(user.id);
       await fetchFriendRequests(user.id);
@@ -84,31 +84,22 @@ export default function SecretPage3() {
       .or(`requester.eq.${userId},requestee.eq.${userId}`)
       .eq("status", "accepted");
 
-    if (error) {
-      console.error("Error fetching friends:", error);
-      return;
-    }
+    if (error) return console.error("Error fetching friends:", error);
 
     if (data) {
-      // Transform the data to match our Friend interface
       const transformedFriends: Friend[] = data.map((item: any) => ({
         id: item.id,
         requester: item.requester,
         requestee: item.requestee,
         status: item.status,
-        requester_user: Array.isArray(item.requester_user) 
-          ? item.requester_user[0] 
-          : item.requester_user,
-        requestee_user: Array.isArray(item.requestee_user) 
-          ? item.requestee_user[0] 
-          : item.requestee_user,
+        requester_user: Array.isArray(item.requester_user) ? item.requester_user[0] : item.requester_user,
+        requestee_user: Array.isArray(item.requestee_user) ? item.requestee_user[0] : item.requestee_user,
       }));
-      
       setFriends(transformedFriends);
     }
   }
 
-  /** Fetch incoming friend requests (where current user is requestee) */
+  /** Fetch incoming friend requests */
   async function fetchFriendRequests(userId: string) {
     const { data: requestsData, error: requestsError } = await supabase
       .from("friends")
@@ -116,15 +107,8 @@ export default function SecretPage3() {
       .eq("requestee", userId)
       .eq("status", "pending");
 
-    if (requestsError) {
-      console.error("Error fetching friend requests:", requestsError);
-      return;
-    }
-
-    if (!requestsData || requestsData.length === 0) {
-      setFriendRequests([]);
-      return;
-    }
+    if (requestsError) return console.error("Error fetching friend requests:", requestsError);
+    if (!requestsData || requestsData.length === 0) return setFriendRequests([]);
 
     const requesterIds = requestsData.map(req => req.requester);
 
@@ -133,22 +117,17 @@ export default function SecretPage3() {
       .select("id, email")
       .in("id", requesterIds);
 
-    if (usersError) {
-      console.error("Error fetching users:", usersError);
-    }
+    if (usersError) console.error("Error fetching users:", usersError);
 
-    const enrichedRequests = requestsData.map(req => {
-      const user = usersData?.find(u => u.id === req.requester);
-      return {
-        ...req,
-        requester_email: user?.email || "Unknown"
-      } as FriendRequest;
-    });
+    const enrichedRequests = requestsData.map(req => ({
+      ...req,
+      requester_email: usersData?.find(u => u.id === req.requester)?.email || "Unknown"
+    })) as FriendRequest[];
 
     setFriendRequests(enrichedRequests);
   }
 
-  /** Fetch sent friend requests (where current user is requester) */
+  /** Fetch sent friend requests */
   async function fetchSentRequests(userId: string) {
     const { data, error } = await supabase
       .from("friends")
@@ -157,25 +136,18 @@ export default function SecretPage3() {
       .eq("status", "pending");
 
     if (error) console.error("Error fetching sent requests:", error);
-
     if (data) setSentRequests(data as FriendRequest[]);
   }
 
   /** Fetch all users for discovery */
   async function fetchAllUsers(userId: string) {
-    const { data } = await supabase
-      .from("users")
-      .select("id,email")
-      .neq("id", userId);
+    const { data } = await supabase.from("users").select("id,email").neq("id", userId);
     if (data) setAllUsers(data as User[]);
   }
 
-  /** Fetch all secret messages */
+  /** Fetch all secrets */
   async function fetchAllSecrets() {
-    const { data } = await supabase
-      .from("secrets")
-      .select("user_id,message,created_at")
-      .order("created_at", { ascending: false });
+    const { data } = await supabase.from("secrets").select("user_id,message,created_at").order("created_at", { ascending: false });
     if (data) setAllSecrets(data as Secret[]);
   }
 
@@ -194,15 +166,8 @@ export default function SecretPage3() {
 
   /** Accept friend request */
   async function acceptFriendRequest(requestId: string) {
-    const { error } = await supabase
-      .from("friends")
-      .update({ status: "accepted" })
-      .eq("id", requestId);
-
-    if (error) {
-      console.error("Error accepting friend request:", error);
-      return;
-    }
+    const { error } = await supabase.from("friends").update({ status: "accepted" }).eq("id", requestId);
+    if (error) return console.error("Error accepting friend request:", error);
 
     if (session) {
       await fetchFriends(session.id);
@@ -214,55 +179,44 @@ export default function SecretPage3() {
     setTimeout(() => setSuccessMessage(""), 3000);
   }
 
-  /** Generate random anonymous name */
+  /** Utilities */
   function getRandomName(userId: string) {
     const adjectives = ["Mysterious", "Secret", "Anonymous", "Hidden", "Silent", "Quiet", "Unknown"];
     const animals = ["Panda", "Fox", "Owl", "Raven", "Wolf", "Tiger", "Dolphin"];
-
-    const hash = userId.split('').reduce((a, b) => {
-      a = ((a << 5) - a) + b.charCodeAt(0);
-      return a & a;
-    }, 0);
-
+    const hash = userId.split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0);
     const adjIndex = Math.abs(hash) % adjectives.length;
     const animalIndex = Math.abs(hash * 2) % animals.length;
-
     return `${adjectives[adjIndex]} ${animals[animalIndex]}`;
   }
 
-  /** Format timestamp */
   function formatTimestamp(timestamp: string) {
     const date = new Date(timestamp);
     return date.toLocaleDateString() + ' at ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
-  /** Check if a user is a friend */
   function isFriend(userId: string) {
-    return friends.some(f => 
+    return friends.some(f =>
       (f.requester === userId && f.requestee === session?.id) ||
       (f.requestee === userId && f.requester === session?.id)
     );
   }
 
-  if (loading) {
-    return (
-      <div className={styles.container}>
-        <div className={styles.loading}>
-          <div className={styles.icon}>
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-          </div>
-          <h2 style={{ color: '#000000' }}>Loading Community...</h2>
-          <p style={{ color: '#000000' }}>Fetching messages and user data</p>
+  if (loading) return (
+    <div className={styles.container}>
+      <div className={styles.loading}>
+        <div className={styles.icon}>
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
         </div>
+        <h2 style={{ color: '#000' }}>Loading Community...</h2>
+        <p style={{ color: '#000' }}>Fetching messages and user data</p>
       </div>
-    );
-  }
+    </div>
+  );
 
-  if (!session) {
-    return null;
-  }
+  if (!session) return null;
+
   
   return (
     <div className={styles.container}>
