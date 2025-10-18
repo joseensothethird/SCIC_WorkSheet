@@ -17,7 +17,7 @@ export default function DashboardPage() {
   const checkAuth = useCallback(async () => {
     try {
       const { data: { session }, error } = await supabase.auth.getSession();
-      
+
       if (error || !session) {
         router.replace("/pages/auth");
         return;
@@ -38,7 +38,7 @@ export default function DashboardPage() {
     checkAuth();
 
     // Listen for auth changes
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT" || !session) {
         router.replace("/pages/auth");
       } else {
@@ -48,12 +48,13 @@ export default function DashboardPage() {
       }
     });
 
+    // Guard against undefined and unsubscribe properly
     return () => {
-      authListener.subscription.unsubscribe();
+      data?.subscription?.unsubscribe();
     };
-  }, [router, checkAuth]);
+  }, [checkAuth, router]);
 
-  async function handleLogout() {
+  const handleLogout = async () => {
     setIsLoading(true);
     const { ok } = await logoutUser();
     if (ok) {
@@ -62,7 +63,7 @@ export default function DashboardPage() {
       alert("Logout failed. Please try again.");
       setIsLoading(false);
     }
-  }
+  };
 
   const handleDeleteAccount = async () => {
     if (!userId) return;
@@ -76,7 +77,6 @@ export default function DashboardPage() {
       await logoutUser();
       router.replace("/"); 
     } else {
-      // Fix: Handle both string and PostgrestError types
       const errorMessage = typeof res.error === "string" 
         ? res.error 
         : res.error?.message || "Unknown error";
@@ -85,7 +85,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Show loading state
   if (isLoading) {
     return (
       <div className={styles.container}>
@@ -96,15 +95,11 @@ export default function DashboardPage() {
     );
   }
 
-  // Don't render content until authenticated
-  if (!isAuthenticated) {
-    return null;
-  }
+  if (!isAuthenticated) return null;
 
   return (
     <div className={styles.container}>
       <div className={styles.content}>
-        {/* Header */}
         <div className={styles.welcomeSection}>
           <div className={styles.icon}>
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -120,7 +115,6 @@ export default function DashboardPage() {
           <p className={styles.welcomeText}>Hello, {userEmail || "User"} 👋</p>
         </div>
 
-        {/* Navigation Buttons */}
         <div className={styles.buttonGrid}>
           <Link href="/pages/SecretPages/profile">
             <button className={`${styles.dashboardButton} ${styles.profile}`}>
@@ -139,7 +133,6 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {/* Logout & Delete */}
         <div className={styles.actionButtons}>
           <button 
             className={styles.logoutButton}
