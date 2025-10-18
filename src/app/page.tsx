@@ -19,7 +19,7 @@ export default function DashboardPage() {
     // Listen for auth changes
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT" || !session) {
-        router.replace("/pages/SecretPages/auth");
+        router.replace("/pages/auth");
       } else {
         setIsAuthenticated(true);
         setUserEmail(session.user.email || "");
@@ -36,7 +36,7 @@ export default function DashboardPage() {
       const { data: { session }, error } = await supabase.auth.getSession();
       
       if (error || !session) {
-        router.replace("/pages/SecretPages/auth");
+        router.replace("/pages/auth");
         return;
       }
 
@@ -44,7 +44,7 @@ export default function DashboardPage() {
       setUserEmail(session.user.email || "");
     } catch (err) {
       console.error("Auth check failed:", err);
-      router.replace("/pages/SecretPages/auth");
+      router.replace("/pages/auth");
     } finally {
       setIsLoading(false);
     }
@@ -54,7 +54,7 @@ export default function DashboardPage() {
     setIsLoading(true);
     const { ok } = await logoutUser();
     if (ok) {
-      router.replace("/pages/SecretPages/auth");
+      router.replace("/pages/auth");
     } else {
       alert("Logout failed. Please try again.");
       setIsLoading(false);
