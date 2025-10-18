@@ -12,3 +12,4 @@ if (!url || !anonKey) {
 
 // Export a single Supabase client instance
 export const supabase: SupabaseClient = createClient(url, anonKey);
+    
