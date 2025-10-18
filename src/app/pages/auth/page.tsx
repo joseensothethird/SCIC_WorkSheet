@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { loginUser, registerUser } from "../../lib/auth";
 import { supabase } from "../../lib/SupabaseClient";
-import styles from "../../../CSS/auth.module.css";
+import styles from "./../../CSS/auth.module.css";
 
 export default function AuthForms() {
   const router = useRouter();
