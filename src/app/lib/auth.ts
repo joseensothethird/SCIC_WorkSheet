@@ -1,12 +1,20 @@
+// src/app/lib/auth.ts
 import { supabase } from "./../lib/SupabaseClient";
 import type { User as SupabaseUser, Session as SupabaseSession } from "@supabase/supabase-js";
 
 export type User = SupabaseUser;
 export type Session = SupabaseSession | null;
 
+// Helper to ensure supabase is initialized
+function getSupabase() {
+  if (!supabase) throw new Error("Supabase client not initialized");
+  return supabase;
+}
+
 /** Register user with email & password */
 export async function registerUser(email: string, password: string) {
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  const sb = getSupabase();
+  const { data, error } = await sb.auth.signUp({ email, password });
   if (error) {
     console.error("registerUser:", error);
     return { ok: false, error };
@@ -16,7 +24,8 @@ export async function registerUser(email: string, password: string) {
 
 /** Login user */
 export async function loginUser(email: string, password: string) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const sb = getSupabase();
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
   if (error) {
     console.error("loginUser:", error);
     return { ok: false, error };
@@ -26,14 +35,16 @@ export async function loginUser(email: string, password: string) {
 
 /** Logout */
 export async function logoutUser() {
-  const { error } = await supabase.auth.signOut();
+  const sb = getSupabase();
+  const { error } = await sb.auth.signOut();
   if (error) console.error("logoutUser:", error);
   return { ok: !error, error };
 }
 
 /** Get current session (async only) */
 export async function getSession(): Promise<Session> {
-  const { data, error } = await supabase.auth.getSession();
+  const sb = getSupabase();
+  const { data, error } = await sb.auth.getSession();
   if (error) {
     console.error("getSession:", error);
     return null;
@@ -45,7 +56,8 @@ export async function getSession(): Promise<Session> {
 export async function deleteUserAccount(userId: string) {
   if (!userId) return { ok: false, error: "No user ID provided" };
 
-  const { error } = await supabase.from("users").delete().eq("id", userId);
+  const sb = getSupabase();
+  const { error } = await sb.from("users").delete().eq("id", userId);
 
   if (error) {
     console.error("deleteUserAccount:", error);

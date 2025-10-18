@@ -7,6 +7,12 @@ import { supabase } from "./lib/SupabaseClient";
 import { logoutUser, deleteUserAccount } from "./lib/auth";
 import styles from "./CSS/SecretPage.module.css";
 
+// Helper to safely get supabase client
+function getSupabase() {
+  if (!supabase) throw new Error("Supabase client not initialized");
+  return supabase;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -16,7 +22,8 @@ export default function DashboardPage() {
 
   const checkAuth = useCallback(async () => {
     try {
-      const { data: { session }, error } = await supabase.auth.getSession();
+      const sb = getSupabase();
+      const { data: { session }, error } = await sb.auth.getSession();
 
       if (error || !session) {
         router.replace("/pages/auth");
@@ -37,8 +44,9 @@ export default function DashboardPage() {
   useEffect(() => {
     checkAuth();
 
+    const sb = getSupabase();
     // Listen for auth changes
-    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: listener } = sb.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT" || !session) {
         router.replace("/pages/auth");
       } else {
@@ -48,9 +56,8 @@ export default function DashboardPage() {
       }
     });
 
-    // Guard against undefined and unsubscribe properly
     return () => {
-      data?.subscription?.unsubscribe();
+      listener?.subscription?.unsubscribe();
     };
   }, [checkAuth, router]);
 

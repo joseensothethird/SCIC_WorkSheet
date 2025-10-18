@@ -25,7 +25,7 @@ interface FriendRequest {
   requester: string;
   requestee: string;
   status: "pending";
-  created_at: string;
+  created_at?: string;
   requester_email: string;
 }
 
@@ -71,7 +71,8 @@ export default function SecretPage3() {
 
   /** Fetch accepted friends */
   async function fetchFriends(userId: string) {
-    const { data, error } = await supabase
+    if (!supabase) return;
+    const { data, error } = await supabase!
       .from("friends")
       .select(`
         id,
@@ -101,7 +102,8 @@ export default function SecretPage3() {
 
   /** Fetch incoming friend requests */
   async function fetchFriendRequests(userId: string) {
-    const { data: requestsData, error: requestsError } = await supabase
+    if (!supabase) return;
+    const { data: requestsData, error: requestsError } = await supabase!
       .from("friends")
       .select("id, requester, requestee, status, created_at")
       .eq("requestee", userId)
@@ -112,7 +114,7 @@ export default function SecretPage3() {
 
     const requesterIds = requestsData.map(req => req.requester);
 
-    const { data: usersData, error: usersError } = await supabase
+    const { data: usersData, error: usersError } = await supabase!
       .from("users")
       .select("id, email")
       .in("id", requesterIds);
@@ -129,7 +131,8 @@ export default function SecretPage3() {
 
   /** Fetch sent friend requests */
   async function fetchSentRequests(userId: string) {
-    const { data, error } = await supabase
+    if (!supabase) return;
+    const { data, error } = await supabase!
       .from("friends")
       .select("id, requester, requestee, status")
       .eq("requester", userId)
@@ -141,21 +144,23 @@ export default function SecretPage3() {
 
   /** Fetch all users for discovery */
   async function fetchAllUsers(userId: string) {
-    const { data } = await supabase.from("users").select("id,email").neq("id", userId);
+    if (!supabase) return;
+    const { data } = await supabase!.from("users").select("id,email").neq("id", userId);
     if (data) setAllUsers(data as User[]);
   }
 
   /** Fetch all secrets */
   async function fetchAllSecrets() {
-    const { data } = await supabase.from("secrets").select("user_id,message,created_at").order("created_at", { ascending: false });
+    if (!supabase) return;
+    const { data } = await supabase!.from("secrets").select("user_id,message,created_at").order("created_at", { ascending: false });
     if (data) setAllSecrets(data as Secret[]);
   }
 
   /** Send friend request */
   async function sendFriendRequest(userId: string) {
-    if (!session) return;
+    if (!session || !supabase) return;
     setAddingFriendId(userId);
-    await supabase.from("friends").insert([{ requester: session.id, requestee: userId }]);
+    await supabase!.from("friends").insert([{ requester: session.id, requestee: userId }]);
     await fetchFriends(session.id);
     await fetchFriendRequests(session.id);
     await fetchSentRequests(session.id);
@@ -166,14 +171,13 @@ export default function SecretPage3() {
 
   /** Accept friend request */
   async function acceptFriendRequest(requestId: string) {
-    const { error } = await supabase.from("friends").update({ status: "accepted" }).eq("id", requestId);
+    if (!session || !supabase) return;
+    const { error } = await supabase!.from("friends").update({ status: "accepted" }).eq("id", requestId);
     if (error) return console.error("Error accepting friend request:", error);
 
-    if (session) {
-      await fetchFriends(session.id);
-      await fetchFriendRequests(session.id);
-      await fetchSentRequests(session.id);
-    }
+    await fetchFriends(session.id);
+    await fetchFriendRequests(session.id);
+    await fetchSentRequests(session.id);
 
     setSuccessMessage("Friend request accepted!");
     setTimeout(() => setSuccessMessage(""), 3000);
@@ -204,19 +208,13 @@ export default function SecretPage3() {
   if (loading) return (
     <div className={styles.container}>
       <div className={styles.loading}>
-        <div className={styles.icon}>
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-          </svg>
-        </div>
-        <h2 style={{ color: '#000' }}>Loading Community...</h2>
-        <p style={{ color: '#000' }}>Fetching messages and user data</p>
+        <h2>Loading Community...</h2>
+        <p>Fetching messages and user data</p>
       </div>
     </div>
   );
 
   if (!session) return null;
-
   
   return (
     <div className={styles.container}>

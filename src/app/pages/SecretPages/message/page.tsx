@@ -22,7 +22,7 @@ export default function SecretPageMessage() {
 
   useEffect(() => {
     async function init() {
-      const s = await getSession(); // ✅ Use the correct async getSession
+      const s = await getSession();
       if (!s) {
         router.push("/");
         return;
@@ -40,9 +40,11 @@ export default function SecretPageMessage() {
     init();
   }, [router]);
 
+  /** Fetch secret message */
   async function fetchMessage(userId: string) {
+    if (!supabase) return; // runtime guard
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabase!
         .from("secrets")
         .select("message")
         .eq("user_id", userId)
@@ -64,27 +66,26 @@ export default function SecretPageMessage() {
     setStatusMessage("");
   };
 
+  /** Save secret message */
   async function saveMessage() {
     if (!message.trim()) {
       setStatusMessage("⚠️ Secret message cannot be empty.");
       return;
     }
-    if (!session) return;
+    if (!session || !supabase) return;
 
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from("secrets")
-        .upsert(
-          [
-            {
-              user_id: session.id,
-              message: message.trim(),
-              updated_at: new Date().toISOString(),
-            },
-          ],
-          { onConflict: "user_id" }
-        );
+      const { error } = await supabase!.from("secrets").upsert(
+        [
+          {
+            user_id: session.id,
+            message: message.trim(),
+            updated_at: new Date().toISOString(),
+          },
+        ],
+        { onConflict: "user_id" }
+      );
 
       if (error) {
         console.error("Save error:", error);
@@ -101,13 +102,13 @@ export default function SecretPageMessage() {
     }
   }
 
+  /** Delete user account */
   const handleDeleteAccount = async () => {
     if (!session) return;
 
     const confirmDelete = confirm(
       "⚠️ Are you sure you want to delete your account?\n\nThis will permanently delete:\n• Your account\n• Your secret message\n• All your friend connections\n\nThis action CANNOT be undone!"
     );
-
     if (!confirmDelete) return;
 
     const doubleConfirm = prompt("Type YES to delete your account permanently.");
