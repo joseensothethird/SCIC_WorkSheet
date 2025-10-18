@@ -6,14 +6,19 @@ import { getSessionAsync, logoutUser, deleteUserAccount } from "./../../../lib/a
 import { supabase } from "./../../../lib/SupabaseClient";
 import styles from "../../../CSS/SecretPage.module.css";
 
-export default function SecretPage1() {
+interface User {
+  id: string;
+  email: string;
+}
+
+export default function SecretPageMessage() {
   const router = useRouter();
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<User | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [charCount, setCharCount] = useState(0);
-  const [statusMessage, setStatusMessage] = useState(""); // <-- new
+  const [statusMessage, setStatusMessage] = useState("");
 
   useEffect(() => {
     async function init() {
@@ -40,8 +45,8 @@ export default function SecretPage1() {
         setMessage(data.message);
         setCharCount(data.message.length);
       }
-    } catch (error) {
-      console.error("Fetch error:", error);
+    } catch (err) {
+      console.error("Fetch error:", err);
     } finally {
       setLoading(false);
     }
@@ -51,7 +56,7 @@ export default function SecretPage1() {
     const value = e.target.value;
     setMessage(value);
     setCharCount(value.length);
-    setStatusMessage(""); // clear status message on change
+    setStatusMessage("");
   };
 
   async function saveMessage() {
@@ -59,6 +64,8 @@ export default function SecretPage1() {
       setStatusMessage("⚠️ Secret message cannot be empty.");
       return;
     }
+
+    if (!session) return;
 
     setSaving(true);
 
@@ -74,7 +81,7 @@ export default function SecretPage1() {
             },
           ],
           {
-            onConflict: ["user_id"], // update if exists
+            onConflict: ["user_id"],
           }
         );
 
@@ -108,7 +115,7 @@ export default function SecretPage1() {
       <div className={styles.content}>
         <div className={styles.heroSection}>
           <h1>Secret Message</h1>
-          <p>Welcome back, {session.email} 👋</p>
+          <p>Welcome back, {session?.email} 👋</p>
         </div>
 
         <div className={styles.editorSection}>
@@ -120,32 +127,34 @@ export default function SecretPage1() {
             onChange={handleMessageChange}
             maxLength={1000}
           />
-          <div className={styles.statusText}>
-            {statusMessage && (
-              <span
-                style={{
-                  color: statusMessage.startsWith("✅") ? "green" : "red",
-                  fontWeight: "bold",
-                  marginTop: "0.5rem",
-                  display: "block",
-                }}
-              >
-                {statusMessage}
-              </span>
-            )}
+          <div style={{ marginTop: "0.5rem", fontSize: "0.9rem", color: "#666" }}>
+            {charCount} / 1000 characters
           </div>
+          {statusMessage && (
+            <div
+              style={{
+                color: statusMessage.startsWith("✅") ? "green" : "red",
+                fontWeight: "bold",
+                marginTop: "0.5rem",
+              }}
+            >
+              {statusMessage}
+            </div>
+          )}
 
           <button
             onClick={saveMessage}
             disabled={saving || !message.trim()}
-            className={`${styles.saveButton} ${saving ? styles.saving : ''}`}
+            className={`${styles.saveButton} ${saving ? styles.saving : ""}`}
           >
             {saving ? "Saving..." : "Save Secret"}
           </button>
         </div>
 
         <div className={styles.actionButtons}>
-          <button onClick={() => router.push("/")} className={styles.backButton}>Back to Dashboard</button>
+          <button onClick={() => router.push("/")} className={styles.backButton}>
+            Back to Dashboard
+          </button>
           <button
             onClick={async () => {
               await logoutUser();
@@ -157,7 +166,9 @@ export default function SecretPage1() {
           </button>
           <button
             onClick={async () => {
-              const confirmDelete = confirm("Are you sure you want to delete your account? This action cannot be undone.");
+              const confirmDelete = confirm(
+                "Are you sure you want to delete your account? This action cannot be undone."
+              );
               if (confirmDelete) {
                 await deleteUserAccount();
                 router.push("/");

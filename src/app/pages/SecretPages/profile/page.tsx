@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getSessionAsync, logoutUser, deleteUserAccount } from "./../../../lib/auth";
+import { getSessionAsync, logoutUser, deleteUserAccount, User } from "./../../../lib/auth";
 import { supabase } from "./../../../lib/SupabaseClient";
 import styles from "../../../CSS/SecretPage.module.css";
 
-export default function SecretPage1() {
+export default function SecretPageProfile() {
   const router = useRouter();
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<User | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -63,7 +63,7 @@ export default function SecretPage1() {
             </svg>
           </div>
           <h1 className={styles.title} style={{ color: '#000000' }}>My Secret Message</h1>
-          <p className={styles.welcomeText} style={{ color: '#000000' }}>Welcome back, {session.email} 👋</p>
+          <p className={styles.welcomeText} style={{ color: '#000000' }}>Welcome back, {session?.email} 👋</p>
         </div>
 
         {/* Display Secret Message */}
@@ -93,7 +93,6 @@ export default function SecretPage1() {
             onClick={() => router.push("/")}
             className={styles.backButton}
           >
-            
             Back to Dashboard
           </button>
 
@@ -112,9 +111,10 @@ export default function SecretPage1() {
 
           <button
             onClick={async () => {
+              if (!session) return;
               const confirmDelete = confirm("Are you sure you want to delete your account? This action cannot be undone.");
               if (confirmDelete) {
-                await deleteUserAccount();
+                await deleteUserAccount(session.id);
                 router.push("/");
               }
             }}

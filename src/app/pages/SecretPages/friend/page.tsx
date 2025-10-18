@@ -6,16 +6,45 @@ import { getSessionAsync, logoutUser } from "../../../lib/auth";
 import { supabase } from "./../../../lib/SupabaseClient";
 import styles from "../../../CSS/SecretPage.module.css";
 
+interface User {
+  id: string;
+  email: string;
+}
+
+interface Friend {
+  id: string;
+  requester: string;
+  requestee: string;
+  status: "pending" | "accepted";
+  requester_user?: User;
+  requestee_user?: User;
+}
+
+interface FriendRequest {
+  id: string;
+  requester: string;
+  requestee: string;
+  status: "pending";
+  created_at: string;
+  requester_email: string;
+}
+
+interface Secret {
+  user_id: string;
+  message: string;
+  created_at: string;
+}
+
 export default function SecretPage3() {
   const router = useRouter();
-  const [session, setSession] = useState<any>(null);
-  const [friends, setFriends] = useState<any[]>([]);
-  const [friendRequests, setFriendRequests] = useState<any[]>([]);
-  const [sentRequests, setSentRequests] = useState<any[]>([]);
-  const [allUsers, setAllUsers] = useState<any[]>([]);
-  const [allSecrets, setAllSecrets] = useState<any[]>([]);
+  const [session, setSession] = useState<User | null>(null);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  const [sentRequests, setSentRequests] = useState<FriendRequest[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [allSecrets, setAllSecrets] = useState<Secret[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("bulletin");
+  const [activeTab, setActiveTab] = useState<"bulletin" | "requests" | "discover">("bulletin");
   const [addingFriendId, setAddingFriendId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string>("");
 
@@ -37,7 +66,7 @@ export default function SecretPage3() {
   /** Fetch accepted friends */
   async function fetchFriends(userId: string) {
     const { data } = await supabase
-      .from("friends")
+      .from<Friend>("friends")
       .select(`
         requester,
         requestee,
@@ -47,13 +76,14 @@ export default function SecretPage3() {
       `)
       .or(`requester.eq.${userId},requestee.eq.${userId}`)
       .eq("status", "accepted");
+
     if (data) setFriends(data);
   }
 
   /** Fetch incoming friend requests (where current user is requestee) */
   async function fetchFriendRequests(userId: string) {
     const { data: requestsData, error: requestsError } = await supabase
-      .from("friends")
+      .from<FriendRequest>("friends")
       .select("id, requester, requestee, status, created_at")
       .eq("requestee", userId)
       .eq("status", "pending");
@@ -71,7 +101,7 @@ export default function SecretPage3() {
     const requesterIds = requestsData.map(req => req.requester);
 
     const { data: usersData, error: usersError } = await supabase
-      .from("users")
+      .from<User>("users")
       .select("id, email")
       .in("id", requesterIds);
 
@@ -93,19 +123,12 @@ export default function SecretPage3() {
   /** Fetch sent friend requests (where current user is requester) */
   async function fetchSentRequests(userId: string) {
     const { data, error } = await supabase
-      .from("friends")
-      .select(`
-        id,
-        requester,
-        requestee,
-        status
-      `)
+      .from<FriendRequest>("friends")
+      .select("id, requester, requestee, status")
       .eq("requester", userId)
       .eq("status", "pending");
 
-    if (error) {
-      console.error("Error fetching sent requests:", error);
-    }
+    if (error) console.error("Error fetching sent requests:", error);
 
     if (data) setSentRequests(data);
   }
@@ -113,7 +136,7 @@ export default function SecretPage3() {
   /** Fetch all users for discovery */
   async function fetchAllUsers(userId: string) {
     const { data } = await supabase
-      .from("users")
+      .from<User>("users")
       .select("id,email")
       .neq("id", userId);
     if (data) setAllUsers(data);
@@ -121,7 +144,9 @@ export default function SecretPage3() {
 
   /** Fetch all secret messages */
   async function fetchAllSecrets() {
-    const { data } = await supabase.from("secrets").select("user_id,message,created_at");
+    const { data } = await supabase
+      .from<Secret>("secrets")
+      .select("user_id,message,created_at");
     if (data) setAllSecrets(data);
   }
 
@@ -150,9 +175,11 @@ export default function SecretPage3() {
       return;
     }
 
-    await fetchFriends(session.id);
-    await fetchFriendRequests(session.id);
-    await fetchSentRequests(session.id);
+    if (session) {
+      await fetchFriends(session.id);
+      await fetchFriendRequests(session.id);
+      await fetchSentRequests(session.id);
+    }
 
     setSuccessMessage("Friend request accepted!");
     setTimeout(() => setSuccessMessage(""), 3000);
@@ -183,8 +210,8 @@ export default function SecretPage3() {
   /** Check if a user is a friend */
   function isFriend(userId: string) {
     return friends.some(f => 
-      (f.requester === userId && f.requestee === session.id) ||
-      (f.requestee === userId && f.requester === session.id)
+      (f.requester === userId && f.requestee === session?.id) ||
+      (f.requestee === userId && f.requester === session?.id)
     );
   }
 
@@ -202,8 +229,7 @@ export default function SecretPage3() {
         </div>
       </div>
     );
-  }
-
+  } 
   return (
     <div className={styles.container}>
       <div className={styles.content}>

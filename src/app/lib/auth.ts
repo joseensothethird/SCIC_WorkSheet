@@ -1,12 +1,10 @@
 // src/lib/auth.ts
 import { supabase } from "./../lib/SupabaseClient";
+import { User as SupabaseUser, Session as SupabaseSession } from "@supabase/supabase-js";
 
-type Session = {
-  access_token: string;
-  token_type: string;
-  expires_at?: number;
-  user: any;
-} | null;
+export type User = SupabaseUser;
+
+export type Session = SupabaseSession | null;
 
 /** Register user with email & password */
 export async function registerUser(email: string, password: string) {
@@ -15,7 +13,6 @@ export async function registerUser(email: string, password: string) {
     console.error("registerUser:", error);
     return { ok: false, error };
   }
-  // data.user exists but email confirmation may be required depending on settings
   return { ok: true, data };
 }
 
@@ -36,22 +33,21 @@ export async function logoutUser() {
   return { ok: !error, error };
 }
 
-/** Get current session (client-side) */
+/** Get current session (client-side, sync) */
 export function getSession(): Session {
-  // supabase stores session in localStorage automatically
-  // but you can also access current session:
-  // @ts-ignore
-  return supabase.auth.getSession ? null : null;
+  // @ts-expect-error Supabase types may not expose getSession synchronously
+  const session = supabase.auth.getSession?.() ?? null;
+  return session as Session;
 }
 
-/** Better: async get session */
-export async function getSessionAsync() {
+/** Get current session (async) */
+export async function getSessionAsync(): Promise<Session> {
   const { data, error } = await supabase.auth.getSession();
   if (error) {
     console.error("getSessionAsync:", error);
     return null;
   }
-  return data.session; // may be null
+  return data.session;
 }
 
 /** Delete current user row from 'users' table */
