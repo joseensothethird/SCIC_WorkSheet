@@ -7,11 +7,22 @@ if (typeof window !== "undefined") {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !anonKey) {
-    console.warn(
-      "NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are not set!"
+    console.error(
+      "Supabase environment variables are missing:",
+      {
+        hasUrl: !!url,
+        hasAnonKey: !!anonKey
+      }
     );
+    // You can also provide fallback values for development
+    // throw new Error("Supabase environment variables are not set!");
   } else {
-    supabase = createClient(url, anonKey);
+    supabase = createClient(url, anonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+      }
+    });
   }
 }
 
