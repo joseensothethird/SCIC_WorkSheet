@@ -52,11 +52,17 @@ export default function SecretPage3() {
     async function init() {
       const s = await getSessionAsync();
       if (!s) return router.push("/");
-      setSession(s.user);
-      await fetchFriends(s.user.id);
-      await fetchFriendRequests(s.user.id);
-      await fetchSentRequests(s.user.id);
-      await fetchAllUsers(s.user.id);
+      
+      const user: User = {
+        id: s.user.id,
+        email: s.user.email || ""
+      };
+      
+      setSession(user);
+      await fetchFriends(user.id);
+      await fetchFriendRequests(user.id);
+      await fetchSentRequests(user.id);
+      await fetchAllUsers(user.id);
       await fetchAllSecrets();
       setLoading(false);
     }
@@ -65,9 +71,10 @@ export default function SecretPage3() {
 
   /** Fetch accepted friends */
   async function fetchFriends(userId: string) {
-    const { data } = await supabase
-      .from<Friend>("friends")
+    const { data, error } = await supabase
+      .from("friends")
       .select(`
+        id,
         requester,
         requestee,
         status,
@@ -77,13 +84,34 @@ export default function SecretPage3() {
       .or(`requester.eq.${userId},requestee.eq.${userId}`)
       .eq("status", "accepted");
 
-    if (data) setFriends(data);
+    if (error) {
+      console.error("Error fetching friends:", error);
+      return;
+    }
+
+    if (data) {
+      // Transform the data to match our Friend interface
+      const transformedFriends: Friend[] = data.map((item: any) => ({
+        id: item.id,
+        requester: item.requester,
+        requestee: item.requestee,
+        status: item.status,
+        requester_user: Array.isArray(item.requester_user) 
+          ? item.requester_user[0] 
+          : item.requester_user,
+        requestee_user: Array.isArray(item.requestee_user) 
+          ? item.requestee_user[0] 
+          : item.requestee_user,
+      }));
+      
+      setFriends(transformedFriends);
+    }
   }
 
   /** Fetch incoming friend requests (where current user is requestee) */
   async function fetchFriendRequests(userId: string) {
     const { data: requestsData, error: requestsError } = await supabase
-      .from<FriendRequest>("friends")
+      .from("friends")
       .select("id, requester, requestee, status, created_at")
       .eq("requestee", userId)
       .eq("status", "pending");
@@ -101,7 +129,7 @@ export default function SecretPage3() {
     const requesterIds = requestsData.map(req => req.requester);
 
     const { data: usersData, error: usersError } = await supabase
-      .from<User>("users")
+      .from("users")
       .select("id, email")
       .in("id", requesterIds);
 
@@ -114,7 +142,7 @@ export default function SecretPage3() {
       return {
         ...req,
         requester_email: user?.email || "Unknown"
-      };
+      } as FriendRequest;
     });
 
     setFriendRequests(enrichedRequests);
@@ -123,31 +151,32 @@ export default function SecretPage3() {
   /** Fetch sent friend requests (where current user is requester) */
   async function fetchSentRequests(userId: string) {
     const { data, error } = await supabase
-      .from<FriendRequest>("friends")
+      .from("friends")
       .select("id, requester, requestee, status")
       .eq("requester", userId)
       .eq("status", "pending");
 
     if (error) console.error("Error fetching sent requests:", error);
 
-    if (data) setSentRequests(data);
+    if (data) setSentRequests(data as FriendRequest[]);
   }
 
   /** Fetch all users for discovery */
   async function fetchAllUsers(userId: string) {
     const { data } = await supabase
-      .from<User>("users")
+      .from("users")
       .select("id,email")
       .neq("id", userId);
-    if (data) setAllUsers(data);
+    if (data) setAllUsers(data as User[]);
   }
 
   /** Fetch all secret messages */
   async function fetchAllSecrets() {
     const { data } = await supabase
-      .from<Secret>("secrets")
-      .select("user_id,message,created_at");
-    if (data) setAllSecrets(data);
+      .from("secrets")
+      .select("user_id,message,created_at")
+      .order("created_at", { ascending: false });
+    if (data) setAllSecrets(data as Secret[]);
   }
 
   /** Send friend request */
@@ -229,7 +258,12 @@ export default function SecretPage3() {
         </div>
       </div>
     );
-  } 
+  }
+
+  if (!session) {
+    return null;
+  }
+  
   return (
     <div className={styles.container}>
       <div className={styles.content}>
@@ -448,7 +482,6 @@ export default function SecretPage3() {
         {/* Action Buttons */}
         <div className={styles.actionButtons}>
           <button onClick={() => router.push("/")} className={styles.backButton}>
-            
             Back to Dashboard
           </button>
           <button

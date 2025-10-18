@@ -1,17 +1,38 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "./lib/SupabaseClient";
-import { logoutUser } from "./lib/auth";
+import { logoutUser, deleteUserAccount } from "./lib/auth";
 import styles from "./CSS/SecretPage.module.css";
 
 export default function DashboardPage() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userEmail, setUserEmail] = useState("");
+  const [userId, setUserId] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
+
+  const checkAuth = useCallback(async () => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error || !session) {
+        router.replace("/pages/auth");
+        return;
+      }
+
+      setIsAuthenticated(true);
+      setUserEmail(session.user.email || "");
+      setUserId(session.user.id);
+    } catch (err) {
+      console.error("Auth check failed:", err);
+      router.replace("/pages/auth");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [router]);
 
   useEffect(() => {
     checkAuth();
@@ -23,32 +44,14 @@ export default function DashboardPage() {
       } else {
         setIsAuthenticated(true);
         setUserEmail(session.user.email || "");
+        setUserId(session.user.id);
       }
     });
 
     return () => {
       authListener.subscription.unsubscribe();
     };
-  }, [router]);
-
-  async function checkAuth() {
-    try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (error || !session) {
-        router.replace("/pages/auth");
-        return;
-      }
-
-      setIsAuthenticated(true);
-      setUserEmail(session.user.email || "");
-    } catch (err) {
-      console.error("Auth check failed:", err);
-      router.replace("/pages/auth");
-    } finally {
-      setIsLoading(false);
-    }
-  }
+  }, [router, checkAuth]);
 
   async function handleLogout() {
     setIsLoading(true);
@@ -62,19 +65,25 @@ export default function DashboardPage() {
   }
 
   const handleDeleteAccount = async () => {
-  if (!user) return;
-  if (!confirm("Are you sure you want to delete your account?")) return;
+    if (!userId) return;
+    if (!confirm("Are you sure you want to delete your account?")) return;
 
-  const res = await deleteUserAccount(user.id);
+    setIsLoading(true);
+    const res = await deleteUserAccount(userId);
 
-  if (res.ok) {
-    alert("Account deleted successfully.");
-    await logoutUser(); // log them out after deletion
-    router.replace("/"); 
-  } else {
-    alert("Failed to delete account: " + res.error?.message);
-  }
-};
+    if (res.ok) {
+      alert("Account deleted successfully.");
+      await logoutUser();
+      router.replace("/"); 
+    } else {
+      // Fix: Handle both string and PostgrestError types
+      const errorMessage = typeof res.error === "string" 
+        ? res.error 
+        : res.error?.message || "Unknown error";
+      alert("Failed to delete account: " + errorMessage);
+      setIsLoading(false);
+    }
+  };
 
   // Show loading state
   if (isLoading) {

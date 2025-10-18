@@ -27,8 +27,15 @@ export default function SecretPageMessage() {
         router.push("/");
         return;
       }
-      setSession(s.user);
-      await fetchMessage(s.user.id);
+
+      const user: User = {
+        id: s.user.id,
+        email: s.user.email || ""
+      };
+
+      setSession(user);
+      await fetchMessage(user.id);
+      setLoading(false);
     }
     init();
   }, [router]);
@@ -47,8 +54,6 @@ export default function SecretPageMessage() {
       }
     } catch (err) {
       console.error("Fetch error:", err);
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -77,11 +82,11 @@ export default function SecretPageMessage() {
             {
               user_id: session.id,
               message: message.trim(),
-              updated_at: new Date(),
+              updated_at: new Date().toISOString(),
             },
           ],
           {
-            onConflict: ["user_id"],
+            onConflict: "user_id",
           }
         );
 
@@ -90,6 +95,7 @@ export default function SecretPageMessage() {
         setStatusMessage(`❌ Failed to save message: ${error.message}`);
       } else {
         setStatusMessage("✅ Secret message saved successfully!");
+        setTimeout(() => setStatusMessage(""), 3000);
       }
     } catch (err) {
       console.error("Unexpected error:", err);
@@ -103,58 +109,83 @@ export default function SecretPageMessage() {
     return (
       <div className={styles.container}>
         <div className={styles.loading}>
-          <h2 className="heroTitle">Loading Your Secret</h2>
-          <p className="heroSubtitle">Retrieving your encrypted message...</p>
+          <div className={styles.icon}>
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <h2 style={{ color: '#000000' }}>Loading Your Secret</h2>
+          <p style={{ color: '#000000' }}>Retrieving your encrypted message...</p>
         </div>
       </div>
     );
   }
 
+  if (!session) return null;
+
+  const handleDeleteAccount = async () => {
+    const confirmDelete = confirm(
+      "⚠️ Are you sure you want to delete your account?\n\nThis will permanently delete:\n• Your account\n• Your secret message\n• All your friend connections\n\nThis action CANNOT be undone!"
+    );
+
+    if (!confirmDelete) return;
+
+    const doubleConfirm = prompt(
+      "Type YES to delete your account permanently."
+    );
+
+    if (doubleConfirm !== "YES") return;
+
+    try {
+      // Pass the user ID to deleteUserAccount
+      await deleteUserAccount(session.id);
+      router.push("/");
+    } catch (err) {
+      console.error("Delete account error:", err);
+      alert("❌ Failed to delete your account. Please try again.");
+    }
+  };
+
   return (
     <div className={styles.container}>
       <div className={styles.content}>
-        <div className={styles.heroSection}>
-          <h1>Secret Message</h1>
-          <p>Welcome back, {session?.email} 👋</p>
-        </div>
-
-        <div className={styles.editorSection}>
-          <textarea
-            className={styles.modernTextarea}
-            rows={6}
-            placeholder="Write your secret message here..."
-            value={message}
-            onChange={handleMessageChange}
-            maxLength={1000}
-          />
-          <div style={{ marginTop: "0.5rem", fontSize: "0.9rem", color: "#666" }}>
-            {charCount} / 1000 characters
+        {/* Welcome Section */}
+        <div className={styles.welcomeSection}>
+          <div className={styles.icon}>
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
           </div>
-          {statusMessage && (
-            <div
-              style={{
-                color: statusMessage.startsWith("✅") ? "green" : "red",
-                fontWeight: "bold",
-                marginTop: "0.5rem",
-              }}
-            >
-              {statusMessage}
-            </div>
-          )}
-
-          <button
-            onClick={saveMessage}
-            disabled={saving || !message.trim()}
-            className={`${styles.saveButton} ${saving ? styles.saving : ""}`}
-          >
-            {saving ? "Saving..." : "Save Secret"}
-          </button>
+          <h1 className={styles.title} style={{ color: '#000000' }}>Secret Message</h1>
+          <p className={styles.welcomeText} style={{ color: '#000000' }}>Welcome back, {session.email} 👋</p>
         </div>
 
+        {/* Message Editor */}
+        <div className={styles.section}>
+          <div className={styles.editorSection}>
+            <label className={styles.label}>Your Secret Message</label>
+            <textarea
+              className={styles.modernTextarea}
+              rows={8}
+              placeholder="Write your secret message here..."
+              value={message}
+              onChange={handleMessageChange}
+              maxLength={1000}
+            />
+            <div style={{ marginTop: "0.75rem", fontSize: "0.875rem", color: charCount > 900 ? "#ef4444" : "#6b7280" }}>
+              {charCount} / 1000 characters
+            </div>
+            {statusMessage && <div className={styles.statusMessage}>{statusMessage}</div>}
+
+            <button onClick={saveMessage} disabled={saving || !message.trim()} className={styles.saveButton}>
+              {saving ? "Saving..." : "Save Secret"}
+            </button>
+          </div>
+        </div>
+
+        {/* Actions */}
         <div className={styles.actionButtons}>
-          <button onClick={() => router.push("/")} className={styles.backButton}>
-            Back to Dashboard
-          </button>
+          <button onClick={() => router.push("/")} className={styles.backButton}>Back to Dashboard</button>
           <button
             onClick={async () => {
               await logoutUser();
@@ -165,15 +196,7 @@ export default function SecretPageMessage() {
             Sign Out
           </button>
           <button
-            onClick={async () => {
-              const confirmDelete = confirm(
-                "Are you sure you want to delete your account? This action cannot be undone."
-              );
-              if (confirmDelete) {
-                await deleteUserAccount();
-                router.push("/");
-              }
-            }}
+            onClick={handleDeleteAccount}
             className={styles.deleteButton}
           >
             Delete Account
