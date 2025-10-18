@@ -1,5 +1,6 @@
 "use client";
 
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSession, logoutUser } from "../../../lib/auth";
@@ -35,6 +36,12 @@ interface Secret {
   created_at: string;
 }
 
+/** Safely get Supabase client */
+function getSupabase() {
+  if (!supabase) throw new Error("Supabase client not initialized");
+  return supabase;
+}
+
 export default function SecretPage3() {
   const router = useRouter();
   const [session, setSession] = useState<User | null>(null);
@@ -53,17 +60,17 @@ export default function SecretPage3() {
       const s = await getSession();
       if (!s) return router.push("/");
 
-      const user: User = {
-        id: s.user.id,
-        email: s.user.email || "",
-      };
-
+      const user: User = { id: s.user.id, email: s.user.email || "" };
       setSession(user);
-      await fetchFriends(user.id);
-      await fetchFriendRequests(user.id);
-      await fetchSentRequests(user.id);
-      await fetchAllUsers(user.id);
-      await fetchAllSecrets();
+
+      await Promise.all([
+        fetchFriends(user.id),
+        fetchFriendRequests(user.id),
+        fetchSentRequests(user.id),
+        fetchAllUsers(user.id),
+        fetchAllSecrets(),
+      ]);
+
       setLoading(false);
     }
     init();
@@ -71,131 +78,162 @@ export default function SecretPage3() {
 
   /** Fetch accepted friends */
   async function fetchFriends(userId: string) {
-    if (!supabase) return;
-    const { data, error } = await supabase!
-      .from("friends")
-      .select(`
-        id,
-        requester,
-        requestee,
-        status,
-        requester_user:requester(id,email),
-        requestee_user:requestee(id,email)
-      `)
-      .or(`requester.eq.${userId},requestee.eq.${userId}`)
-      .eq("status", "accepted");
+    try {
+      const sb = getSupabase();
+      const { data, error } = await sb
+        .from("friends")
+        .select(`
+          id,
+          requester,
+          requestee,
+          status,
+          requester_user:requester(id,email),
+          requestee_user:requestee(id,email)
+        `)
+        .or(`requester.eq.${userId},requestee.eq.${userId}`)
+        .eq("status", "accepted");
 
-    if (error) return console.error("Error fetching friends:", error);
+      if (error) throw error;
 
-    if (data) {
-      const transformedFriends: Friend[] = data.map((item: any) => ({
-        id: item.id,
-        requester: item.requester,
-        requestee: item.requestee,
-        status: item.status,
-        requester_user: Array.isArray(item.requester_user) ? item.requester_user[0] : item.requester_user,
-        requestee_user: Array.isArray(item.requestee_user) ? item.requestee_user[0] : item.requestee_user,
-      }));
-      setFriends(transformedFriends);
+      if (data) {
+        const transformedFriends: Friend[] = data.map((item: any) => ({
+          id: item.id,
+          requester: item.requester,
+          requestee: item.requestee,
+          status: item.status,
+          requester_user: Array.isArray(item.requester_user) ? item.requester_user[0] : item.requester_user,
+          requestee_user: Array.isArray(item.requestee_user) ? item.requestee_user[0] : item.requestee_user,
+        }));
+        setFriends(transformedFriends);
+      }
+    } catch (err) {
+      console.error("fetchFriends error:", err);
     }
   }
 
   /** Fetch incoming friend requests */
   async function fetchFriendRequests(userId: string) {
-    if (!supabase) return;
-    const { data: requestsData, error: requestsError } = await supabase!
-      .from("friends")
-      .select("id, requester, requestee, status, created_at")
-      .eq("requestee", userId)
-      .eq("status", "pending");
+    try {
+      const sb = getSupabase();
+      const { data: requestsData, error: requestsError } = await sb
+        .from("friends")
+        .select("id, requester, requestee, status, created_at")
+        .eq("requestee", userId)
+        .eq("status", "pending");
 
-    if (requestsError) return console.error("Error fetching friend requests:", requestsError);
-    if (!requestsData || requestsData.length === 0) return setFriendRequests([]);
+      if (requestsError) throw requestsError;
+      if (!requestsData || requestsData.length === 0) return setFriendRequests([]);
 
-    const requesterIds = requestsData.map(req => req.requester);
+      const requesterIds = requestsData.map(req => req.requester);
+      const { data: usersData } = await sb.from("users").select("id,email").in("id", requesterIds);
 
-    const { data: usersData, error: usersError } = await supabase!
-      .from("users")
-      .select("id, email")
-      .in("id", requesterIds);
+      const enrichedRequests = requestsData.map(req => ({
+        ...req,
+        requester_email: usersData?.find(u => u.id === req.requester)?.email || "Unknown",
+      })) as FriendRequest[];
 
-    if (usersError) console.error("Error fetching users:", usersError);
-
-    const enrichedRequests = requestsData.map(req => ({
-      ...req,
-      requester_email: usersData?.find(u => u.id === req.requester)?.email || "Unknown"
-    })) as FriendRequest[];
-
-    setFriendRequests(enrichedRequests);
+      setFriendRequests(enrichedRequests);
+    } catch (err) {
+      console.error("fetchFriendRequests error:", err);
+    }
   }
 
   /** Fetch sent friend requests */
   async function fetchSentRequests(userId: string) {
-    if (!supabase) return;
-    const { data, error } = await supabase!
-      .from("friends")
-      .select("id, requester, requestee, status")
-      .eq("requester", userId)
-      .eq("status", "pending");
+    try {
+      const sb = getSupabase();
+      const { data, error } = await sb
+        .from("friends")
+        .select("id, requester, requestee, status")
+        .eq("requester", userId)
+        .eq("status", "pending");
 
-    if (error) console.error("Error fetching sent requests:", error);
-    if (data) setSentRequests(data as FriendRequest[]);
+      if (error) throw error;
+      setSentRequests(data as FriendRequest[]);
+    } catch (err) {
+      console.error("fetchSentRequests error:", err);
+    }
   }
 
   /** Fetch all users for discovery */
   async function fetchAllUsers(userId: string) {
-    if (!supabase) return;
-    const { data } = await supabase!.from("users").select("id,email").neq("id", userId);
-    if (data) setAllUsers(data as User[]);
+    try {
+      const sb = getSupabase();
+      const { data } = await sb.from("users").select("id,email").neq("id", userId);
+      if (data) setAllUsers(data as User[]);
+    } catch (err) {
+      console.error("fetchAllUsers error:", err);
+    }
   }
 
   /** Fetch all secrets */
   async function fetchAllSecrets() {
-    if (!supabase) return;
-    const { data } = await supabase!.from("secrets").select("user_id,message,created_at").order("created_at", { ascending: false });
-    if (data) setAllSecrets(data as Secret[]);
+    try {
+      const sb = getSupabase();
+      const { data } = await sb
+        .from("secrets")
+        .select("user_id,message,created_at")
+        .order("created_at", { ascending: false });
+      if (data) setAllSecrets(data as Secret[]);
+    } catch (err) {
+      console.error("fetchAllSecrets error:", err);
+    }
   }
 
   /** Send friend request */
   async function sendFriendRequest(userId: string) {
-    if (!session || !supabase) return;
+    if (!session) return;
     setAddingFriendId(userId);
-    await supabase!.from("friends").insert([{ requester: session.id, requestee: userId }]);
-    await fetchFriends(session.id);
-    await fetchFriendRequests(session.id);
-    await fetchSentRequests(session.id);
-    setAddingFriendId(null);
-    setSuccessMessage("Friend request sent successfully!");
-    setTimeout(() => setSuccessMessage(""), 3000);
+
+    try {
+      const sb = getSupabase();
+      await sb.from("friends").insert([{ requester: session.id, requestee: userId }]);
+      await Promise.all([
+        fetchFriends(session.id),
+        fetchFriendRequests(session.id),
+        fetchSentRequests(session.id),
+      ]);
+      setSuccessMessage("Friend request sent successfully!");
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err) {
+      console.error("sendFriendRequest error:", err);
+    } finally {
+      setAddingFriendId(null);
+    }
   }
 
   /** Accept friend request */
   async function acceptFriendRequest(requestId: string) {
-    if (!session || !supabase) return;
-    const { error } = await supabase!.from("friends").update({ status: "accepted" }).eq("id", requestId);
-    if (error) return console.error("Error accepting friend request:", error);
+    if (!session) return;
+    try {
+      const sb = getSupabase();
+      const { error } = await sb.from("friends").update({ status: "accepted" }).eq("id", requestId);
+      if (error) throw error;
 
-    await fetchFriends(session.id);
-    await fetchFriendRequests(session.id);
-    await fetchSentRequests(session.id);
+      await Promise.all([
+        fetchFriends(session.id),
+        fetchFriendRequests(session.id),
+        fetchSentRequests(session.id),
+      ]);
 
-    setSuccessMessage("Friend request accepted!");
-    setTimeout(() => setSuccessMessage(""), 3000);
+      setSuccessMessage("Friend request accepted!");
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err) {
+      console.error("acceptFriendRequest error:", err);
+    }
   }
 
   /** Utilities */
   function getRandomName(userId: string) {
     const adjectives = ["Mysterious", "Secret", "Anonymous", "Hidden", "Silent", "Quiet", "Unknown"];
     const animals = ["Panda", "Fox", "Owl", "Raven", "Wolf", "Tiger", "Dolphin"];
-    const hash = userId.split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0);
-    const adjIndex = Math.abs(hash) % adjectives.length;
-    const animalIndex = Math.abs(hash * 2) % animals.length;
-    return `${adjectives[adjIndex]} ${animals[animalIndex]}`;
+    const hash = userId.split("").reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0);
+    return `${adjectives[Math.abs(hash) % adjectives.length]} ${animals[Math.abs(hash * 2) % animals.length]}`;
   }
 
   function formatTimestamp(timestamp: string) {
     const date = new Date(timestamp);
-    return date.toLocaleDateString() + ' at ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `${date.toLocaleDateString()} at ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
   }
 
   function isFriend(userId: string) {

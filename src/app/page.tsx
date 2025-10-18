@@ -7,9 +7,12 @@ import { supabase } from "./lib/SupabaseClient";
 import { logoutUser, deleteUserAccount } from "./lib/auth";
 import styles from "./CSS/SecretPage.module.css";
 
-// Helper to safely get supabase client
+// Safely get Supabase client (returns null on SSR)
 function getSupabase() {
-  if (!supabase) throw new Error("Supabase client not initialized");
+  if (!supabase) {
+    console.warn("Supabase client not initialized (SSR build?)");
+    return null;
+  }
   return supabase;
 }
 
@@ -21,8 +24,10 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   const checkAuth = useCallback(async () => {
+    const sb = getSupabase();
+    if (!sb) return;
+
     try {
-      const sb = getSupabase();
       const { data: { session }, error } = await sb.auth.getSession();
 
       if (error || !session) {
@@ -45,7 +50,8 @@ export default function DashboardPage() {
     checkAuth();
 
     const sb = getSupabase();
-    // Listen for auth changes
+    if (!sb) return;
+
     const { data: listener } = sb.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT" || !session) {
         router.replace("/pages/auth");
@@ -56,18 +62,18 @@ export default function DashboardPage() {
       }
     });
 
-    return () => {
-      listener?.subscription?.unsubscribe();
-    };
+    return () => listener?.subscription?.unsubscribe();
   }, [checkAuth, router]);
 
   const handleLogout = async () => {
     setIsLoading(true);
-    const { ok } = await logoutUser();
+    const { ok, error } = await logoutUser();
+
     if (ok) {
       router.replace("/pages/auth");
     } else {
-      alert("Logout failed. Please try again.");
+      const errorMessage = typeof error === "string" ? error : error?.message || "Logout failed";
+      alert(errorMessage);
       setIsLoading(false);
     }
   };
@@ -107,6 +113,7 @@ export default function DashboardPage() {
   return (
     <div className={styles.container}>
       <div className={styles.content}>
+        {/* Welcome Section */}
         <div className={styles.welcomeSection}>
           <div className={styles.icon}>
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -122,6 +129,7 @@ export default function DashboardPage() {
           <p className={styles.welcomeText}>Hello, {userEmail || "User"} 👋</p>
         </div>
 
+        {/* Dashboard Buttons */}
         <div className={styles.buttonGrid}>
           <Link href="/pages/SecretPages/profile">
             <button className={`${styles.dashboardButton} ${styles.profile}`}>
@@ -140,6 +148,7 @@ export default function DashboardPage() {
           </Link>
         </div>
 
+        {/* Actions */}
         <div className={styles.actionButtons}>
           <button 
             className={styles.logoutButton}

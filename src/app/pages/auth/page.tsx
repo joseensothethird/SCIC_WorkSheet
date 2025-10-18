@@ -25,7 +25,12 @@ export default function AuthForms() {
         if (res.ok) {
           router.replace("/");
         } else {
-          setError(res.error?.message || "Invalid email or password.");
+          // Type-safe error handling
+          const errMsg =
+            typeof res.error === "string"
+              ? res.error
+              : res.error?.message || "Invalid email or password.";
+          setError(errMsg);
         }
       } else {
         if (password !== confirmPassword) {
@@ -37,10 +42,14 @@ export default function AuthForms() {
         if (res.ok) {
           router.replace("/");
         } else {
-          setError(res.error?.message || "Registration failed.");
+          const errMsg =
+            typeof res.error === "string"
+              ? res.error
+              : res.error?.message || "Registration failed.";
+          setError(errMsg);
         }
       }
-    } catch {
+    } catch (err) {
       setError("An unexpected error occurred. Try again.");
     } finally {
       setIsLoading(false);
@@ -140,4 +149,3 @@ export default function AuthForms() {
     </div>
   );
 }
-   

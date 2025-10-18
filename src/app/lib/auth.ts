@@ -5,15 +5,20 @@ import type { User as SupabaseUser, Session as SupabaseSession } from "@supabase
 export type User = SupabaseUser;
 export type Session = SupabaseSession | null;
 
-// Helper to ensure supabase is initialized
+/** Helper to safely get supabase client (avoids SSR issues) */
 function getSupabase() {
-  if (!supabase) throw new Error("Supabase client not initialized");
+  if (!supabase) {
+    console.warn("Supabase client not initialized. Are you running on the server?");
+    return null;
+  }
   return supabase;
 }
 
 /** Register user with email & password */
 export async function registerUser(email: string, password: string) {
   const sb = getSupabase();
+  if (!sb) return { ok: false, error: "Supabase client not available" };
+
   const { data, error } = await sb.auth.signUp({ email, password });
   if (error) {
     console.error("registerUser:", error);
@@ -25,6 +30,8 @@ export async function registerUser(email: string, password: string) {
 /** Login user */
 export async function loginUser(email: string, password: string) {
   const sb = getSupabase();
+  if (!sb) return { ok: false, error: "Supabase client not available" };
+
   const { data, error } = await sb.auth.signInWithPassword({ email, password });
   if (error) {
     console.error("loginUser:", error);
@@ -36,20 +43,29 @@ export async function loginUser(email: string, password: string) {
 /** Logout */
 export async function logoutUser() {
   const sb = getSupabase();
+  if (!sb) return { ok: false, error: "Supabase client not available" };
+
   const { error } = await sb.auth.signOut();
   if (error) console.error("logoutUser:", error);
   return { ok: !error, error };
 }
 
-/** Get current session (async only) */
+/** Get current session (async) */
 export async function getSession(): Promise<Session> {
   const sb = getSupabase();
-  const { data, error } = await sb.auth.getSession();
-  if (error) {
-    console.error("getSession:", error);
+  if (!sb) return null;
+
+  try {
+    const { data, error } = await sb.auth.getSession();
+    if (error) {
+      console.error("getSession:", error);
+      return null;
+    }
+    return data.session;
+  } catch (err) {
+    console.error("getSession error:", err);
     return null;
   }
-  return data.session;
 }
 
 /** Delete current user row from 'users' table */
@@ -57,12 +73,17 @@ export async function deleteUserAccount(userId: string) {
   if (!userId) return { ok: false, error: "No user ID provided" };
 
   const sb = getSupabase();
-  const { error } = await sb.from("users").delete().eq("id", userId);
+  if (!sb) return { ok: false, error: "Supabase client not available" };
 
-  if (error) {
-    console.error("deleteUserAccount:", error);
-    return { ok: false, error };
+  try {
+    const { error } = await sb.from("users").delete().eq("id", userId);
+    if (error) {
+      console.error("deleteUserAccount:", error);
+      return { ok: false, error };
+    }
+    return { ok: true };
+  } catch (err) {
+    console.error("deleteUserAccount error:", err);
+    return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
   }
-
-  return { ok: true };
 }

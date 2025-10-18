@@ -1,15 +1,18 @@
-// ./lib/SupabaseClient.ts
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+let supabase: SupabaseClient | null = null;
 
-if (!url || !anonKey) {
-  throw new Error(
-    "NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set in your environment variables"
-  );
+if (typeof window !== "undefined") {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !anonKey) {
+    console.warn(
+      "NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are not set!"
+    );
+  } else {
+    supabase = createClient(url, anonKey);
+  }
 }
 
-// Export a single Supabase client instance
-export const supabase: SupabaseClient = createClient(url, anonKey);
-    
+export { supabase };

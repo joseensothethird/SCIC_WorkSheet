@@ -11,6 +11,12 @@ interface User {
   email: string;
 }
 
+/** Safely get Supabase client */
+function getSupabase() {
+  if (!supabase) throw new Error("Supabase client not initialized");
+  return supabase;
+}
+
 export default function SecretPageMessage() {
   const router = useRouter();
   const [session, setSession] = useState<User | null>(null);
@@ -22,40 +28,43 @@ export default function SecretPageMessage() {
 
   useEffect(() => {
     async function init() {
-      const s = await getSession();
-      if (!s) {
-        router.push("/");
-        return;
+      try {
+        const s = await getSession();
+        if (!s) {
+          router.push("/");
+          return;
+        }
+
+        const user: User = { id: s.user.id, email: s.user.email || "" };
+        setSession(user);
+
+        await fetchMessage(user.id);
+      } catch (err) {
+        console.error("Init error:", err);
+      } finally {
+        setLoading(false);
       }
-
-      const user: User = {
-        id: s.user.id,
-        email: s.user.email || "",
-      };
-
-      setSession(user);
-      await fetchMessage(user.id);
-      setLoading(false);
     }
     init();
   }, [router]);
 
   /** Fetch secret message */
   async function fetchMessage(userId: string) {
-    if (!supabase) return; // runtime guard
     try {
-      const { data, error } = await supabase!
+      const sb = getSupabase();
+      const { data, error } = await sb
         .from("secrets")
         .select("message")
         .eq("user_id", userId)
         .single();
 
-      if (!error && data) {
+      if (error && error.code !== "PGRST116") throw error; // ignore "row not found"
+      if (data?.message) {
         setMessage(data.message);
         setCharCount(data.message.length);
       }
     } catch (err) {
-      console.error("Fetch error:", err);
+      console.error("Fetch message error:", err);
     }
   }
 
@@ -72,11 +81,12 @@ export default function SecretPageMessage() {
       setStatusMessage("⚠️ Secret message cannot be empty.");
       return;
     }
-    if (!session || !supabase) return;
+    if (!session) return;
 
     setSaving(true);
     try {
-      const { error } = await supabase!.from("secrets").upsert(
+      const sb = getSupabase();
+      const { error } = await sb.from("secrets").upsert(
         [
           {
             user_id: session.id,
@@ -87,41 +97,56 @@ export default function SecretPageMessage() {
         { onConflict: "user_id" }
       );
 
-      if (error) {
-        console.error("Save error:", error);
-        setStatusMessage(`❌ Failed to save message: ${error.message}`);
-      } else {
-        setStatusMessage("✅ Secret message saved successfully!");
-        setTimeout(() => setStatusMessage(""), 3000);
-      }
-    } catch (err) {
-      console.error("Unexpected error:", err);
-      setStatusMessage("❌ Failed to save message due to unexpected error.");
+      if (error) throw error;
+
+      setStatusMessage("✅ Secret message saved successfully!");
+      setTimeout(() => setStatusMessage(""), 3000);
+    } catch (err: any) {
+      console.error("Save error:", err);
+      setStatusMessage(`❌ Failed to save message: ${err?.message || "Unexpected error"}`);
     } finally {
       setSaving(false);
     }
   }
 
-  /** Delete user account */
-  const handleDeleteAccount = async () => {
-    if (!session) return;
 
-    const confirmDelete = confirm(
-      "⚠️ Are you sure you want to delete your account?\n\nThis will permanently delete:\n• Your account\n• Your secret message\n• All your friend connections\n\nThis action CANNOT be undone!"
-    );
-    if (!confirmDelete) return;
+/** Delete user account */
+const handleDeleteAccount = async () => {
+  if (!session) return;
 
-    const doubleConfirm = prompt("Type YES to delete your account permanently.");
-    if (doubleConfirm !== "YES") return;
+  const confirmDelete = confirm(
+    "⚠️ Are you sure you want to delete your account?\n\nThis will permanently delete:\n• Your account\n• Your secret message\n• All your friend connections\n\nThis action CANNOT be undone!"
+  );
+  if (!confirmDelete) return;
 
-    try {
-      await deleteUserAccount(session.id);
-      router.push("/");
-    } catch (err) {
-      console.error("Delete account error:", err);
-      alert("❌ Failed to delete your account. Please try again.");
+  const doubleConfirm = prompt("Type YES to delete your account permanently.");
+  if (doubleConfirm !== "YES") return;
+
+  try {
+    const result = await deleteUserAccount(session.id);
+
+    // Handle the different possible return types
+    if (!result.ok) {
+      let errorMessage = "Unknown error";
+      
+      // Check if error exists and handle different types
+      if (result.error) {
+        if (typeof result.error === "string") {
+          errorMessage = result.error;
+        } else if (result.error && "message" in result.error) {
+          errorMessage = (result.error as any).message;
+        }
+      }
+      
+      throw new Error(errorMessage);
     }
-  };
+
+    router.push("/");
+  } catch (err) {
+    console.error("Delete account error:", err);
+    alert("❌ Failed to delete your account. Please try again.");
+  }
+};
 
   if (loading) {
     return (

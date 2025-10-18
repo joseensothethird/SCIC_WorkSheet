@@ -14,34 +14,76 @@ export default function SecretPageProfile() {
 
   useEffect(() => {
     async function init() {
-      const s = await getSession();
-      if (!s) {
-        router.push("/");
-        return;
+      try {
+        const s = await getSession();
+        if (!s) {
+          router.push("/");
+          return;
+        }
+        setSession(s.user);
+        await fetchMessage(s.user.id);
+      } catch (err) {
+        console.error("Init error:", err);
+      } finally {
+        setLoading(false);
       }
-      setSession(s.user);
-      await fetchMessage(s.user.id);
     }
     init();
   }, [router]);
 
   /** Fetch secret message */
   async function fetchMessage(userId: string) {
-    if (!supabase) return; // runtime guard
+    if (!supabase) return;
     try {
-      const { data, error } = await supabase!
+      const { data, error } = await supabase
         .from("secrets")
         .select("message")
         .eq("user_id", userId)
         .single();
 
-      if (!error && data) setMessage(data.message);
+      if (error && error.code !== "PGRST116") throw error; // ignore "row not found"
+      if (data?.message) setMessage(data.message);
     } catch (err) {
       console.error("Fetch message error:", err);
-    } finally {
-      setLoading(false);
     }
   }
+
+  /** Delete user account with double confirmation */
+  const handleDeleteAccount = async () => {
+    if (!session) return;
+
+    const confirmDelete = confirm(
+      "⚠️ Are you sure you want to delete your account?\nThis will permanently delete your account and all your data!"
+    );
+    if (!confirmDelete) return;
+
+    const doubleConfirm = prompt("Type YES to delete your account permanently.");
+    if (doubleConfirm !== "YES") return;
+
+    try {
+      const result = await deleteUserAccount(session.id);
+      
+      if (!result.ok) {
+        let errorMessage = "Unknown error";
+        
+        // Handle different error types
+        if (result.error) {
+          if (typeof result.error === "string") {
+            errorMessage = result.error;
+          } else if (result.error && "message" in result.error) {
+            errorMessage = (result.error as any).message;
+          }
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      router.push("/");
+    } catch (err) {
+      console.error("Delete account error:", err);
+      alert("❌ Failed to delete your account. Please try again.");
+    }
+  };
 
   if (loading) {
     return (
@@ -57,8 +99,8 @@ export default function SecretPageProfile() {
               />
             </svg>
           </div>
-          <h2 style={{ color: "#000000" }}>Loading your secret...</h2>
-          <p style={{ color: "#000000" }}>Please wait while we fetch your message</p>
+          <h2 style={{ color: "#000" }}>Loading your secret...</h2>
+          <p style={{ color: "#000" }}>Please wait while we fetch your message</p>
         </div>
       </div>
     );
@@ -79,12 +121,8 @@ export default function SecretPageProfile() {
               />
             </svg>
           </div>
-          <h1 className={styles.title} style={{ color: "#000000" }}>
-            My Secret Message
-          </h1>
-          <p className={styles.welcomeText} style={{ color: "#000000" }}>
-            Welcome back, {session?.email} 👋
-          </p>
+          <h1 className={styles.title}>My Secret Message</h1>
+          <p className={styles.welcomeText}>Welcome back, {session?.email} 👋</p>
         </div>
 
         {/* Display Secret Message */}
@@ -127,38 +165,10 @@ export default function SecretPageProfile() {
             }}
             className={styles.logoutButton}
           >
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-              />
-            </svg>
             Sign Out
           </button>
 
-          <button
-            onClick={async () => {
-              if (!session) return;
-              const confirmDelete = confirm(
-                "Are you sure you want to delete your account? This action cannot be undone."
-              );
-              if (confirmDelete) {
-                await deleteUserAccount(session.id);
-                router.push("/");
-              }
-            }}
-            className={styles.deleteButton}
-          >
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-              />
-            </svg>
+          <button onClick={handleDeleteAccount} className={styles.deleteButton}>
             Delete Account
           </button>
         </div>
